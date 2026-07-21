@@ -1,0 +1,22 @@
+# Private business data and runtime outputs
+*.xls
+*.xlsx
+*.csv
+*.log
+*.log.txt
+!出貨清單_範本.xlsx
+private-data/
+
+# Python and build artifacts
+__pycache__/
+*.py[cod]
+.venv-build/
+build/
+dist/
+*.spec
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
