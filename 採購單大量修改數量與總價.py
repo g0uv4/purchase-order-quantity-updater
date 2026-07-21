@@ -126,10 +126,15 @@ def _header_map(headers: list[str]) -> dict[str, int]:
     return idx
 
 
-def load_ship(ship_path: Path):
+def load_ship(ship_path: Path, emit=None):
     ship: dict[str, dict] = {}
     affected: set[str] = set()
     logs: list[tuple[str, str]] = []
+
+    def emit_log(entry):
+        logs.extend((entry,))
+        if emit is not None:
+            emit(entry[0], entry[1])
 
     ext = ship_path.suffix.lower()
     rows: list[list] = []
@@ -178,19 +183,19 @@ def load_ship(ship_path: Path):
             or abs(line - round(line)) > 1e-9
             or qty is None
         ):
-            logs.append(("WARN", f"出貨列 {rno} 項次/數量無法解析，略過"))
+            emit_log(("WARN", f"出貨列 {rno} 項次/數量無法解析，略過"))
             continue
         if qty < 0:
-            logs.append(("WARN", f"出貨列 {rno} 數量為負，略過"))
+            emit_log(("WARN", f"出貨列 {rno} 數量為負，略過"))
             continue
         if not part:
-            logs.append(("WARN", f"出貨列 {rno} 料號空白，無法完整比對，略過"))
+            emit_log(("WARN", f"出貨列 {rno} 料號空白，無法完整比對，略過"))
             continue
         key = f"{po}|{int(line)}"
         if key in ship:
             # 同一 PO + 項次出現多筆時無法判斷哪一筆才正確，整組停用。
             ship[key]["valid"] = False
-            logs.append(("WARN", f"出貨鍵重複，該鍵全部略過: {key}"))
+            emit_log(("WARN", f"出貨鍵重複，該鍵全部略過: {key}"))
             affected.add(po)
             continue
         ship[key] = {
@@ -202,7 +207,7 @@ def load_ship(ship_path: Path):
         }
         affected.add(po)
 
-    logs.append(("INFO", f"出貨載入 筆數={len(ship)} 影響PO數={len(affected)}"))
+    emit_log(("INFO", f"出貨載入 筆數={len(ship)} 影響PO數={len(affected)}"))
     return ship, affected, logs
 
 
@@ -263,8 +268,14 @@ def parse_line_fields(texts: list[str]):
     return line_no, part, qty, price, amt, qty_text_i, price_text_i, amt_text_i
 
 
-def process_po_html(html: str, ship: dict, affected: set[str]):
+def process_po_html(html: str, ship: dict, affected: set[str], emit=None):
     logs: list[tuple[str, str]] = []
+
+    def emit_log(entry):
+        logs.extend((entry,))
+        if emit is not None:
+            emit(entry[0], entry[1])
+
     stats = {
         "updated": 0,
         "unchanged": 0,
@@ -319,7 +330,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
                 if amt_td_idx is not None:
                     old_total = clean_number(texts[amt_td_idx])
                     if old_total is None:
-                        logs.append(
+                        emit_log(
                             (
                                 "WARN",
                                 f"無法解析採購金額合計，保留原值: {current_po}",
@@ -332,7 +343,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
                         # splice in original inner by replacing exact old_td once
                         new_inner = inner.replace(old_td, new_td, 1)
                         stats["totals"] += 1
-                        logs.append(
+                        emit_log(
                             (
                                 "INFO",
                                 f"更新合計 {current_po} "
@@ -366,7 +377,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
             # 出貨清單沒有這個 PO + 項次：整列保持原樣，絕不改成 0。
             if ship_row is None:
                 stats["skipped_not_listed"] += 1
-                logs.append(
+                emit_log(
                     (
                         "SKIP",
                         f"出貨清單未列，保留原值 {current_po} 項次{line_no} {part}",
@@ -381,7 +392,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
             # 重複鍵等無法唯一判定的資料不允許修改。
             if not ship_row.get("valid", True):
                 stats["skipped_invalid"] += 1
-                logs.append(("SKIP", f"出貨資料不唯一，保留原值: {key}"))
+                emit_log(("SKIP", f"出貨資料不唯一，保留原值: {key}"))
                 out_parts.append(m.group(0))
                 last = m.end()
                 continue
@@ -389,7 +400,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
             # 料號也必須完全一致；不一致時連數量、金額與合計都不動。
             if ship_row["part"] != part:
                 stats["skipped_part_mismatch"] += 1
-                logs.append(
+                emit_log(
                     (
                         "SKIP",
                         f"料號不符，保留原值 {key}: "
@@ -412,7 +423,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
                 and abs(new_amt - old_amt) < 0.005
             ):
                 stats["unchanged"] += 1
-                logs.append(
+                emit_log(
                     (
                         "OK",
                         f"完全符合且無須修改 {current_po} 項次{line_no} {part}",
@@ -457,7 +468,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
                 new_inner = new_inner.replace(old_td, new_td, 1)
 
             out_parts.append(open_tr + new_inner + close_tr)
-            logs.append(
+            emit_log(
                 (
                     "OK",
                     f"更新數量 {current_po} 項次{line_no} {part} "
@@ -476,7 +487,7 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
 
     miss = [k for k, v in ship.items() if not v.get("seen", False)]
     for k in miss:
-        logs.append(("WARN", f"找不到完全相同的 PO + 項次，已略過: {k}"))
+        emit_log(("WARN", f"找不到完全相同的 PO + 項次，已略過: {k}"))
     stats["miss"] = len(miss)
     return new_html, stats, logs
 
@@ -488,8 +499,13 @@ def process_po_html(html: str, ship: dict, affected: set[str]):
 APP_NAME = "採購單數量與金額調整工具"
 
 
-def run_conversion(po_path: Path, ship_path: Path):
-    """Process two selected files and return paths, statistics, and logs."""
+def run_conversion(po_path: Path, ship_path: Path, on_log=None):
+    """Process two selected files and return paths, statistics, and logs.
+
+    on_log, when provided, is called as on_log(level, message) for each log
+    entry as it happens, so a GUI can stream progress live. It runs in the
+    calling thread; keep it thread-safe and non-blocking.
+    """
     po_path = Path(po_path)
     ship_path = Path(ship_path)
     t0 = time.perf_counter()
@@ -499,13 +515,13 @@ def run_conversion(po_path: Path, ship_path: Path):
     if not ship_path.exists():
         raise FileNotFoundError(f"找不到出貨清單：{ship_path}")
 
-    ship, affected, logs1 = load_ship(ship_path)
+    ship, affected, logs1 = load_ship(ship_path, emit=on_log)
     if not ship:
         raise ValueError("出貨清單沒有有效資料，請檢查欄位名稱與內容。")
 
     raw = po_path.read_bytes()
     html = raw.decode("utf-8")
-    new_html, stats, logs2 = process_po_html(html, ship, affected)
+    new_html, stats, logs2 = process_po_html(html, ship, affected, emit=on_log)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = po_path.with_name(f"{po_path.stem}_出貨調整_{stamp}.xls")
@@ -531,78 +547,300 @@ def run_conversion(po_path: Path, ship_path: Path):
 
 def launch_gui():
     try:
+        import queue
+        import threading
         import tkinter as tk
-        from tkinter import filedialog, messagebox, ttk
+        from tkinter import filedialog, font as tkfont, messagebox, ttk
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("此環境無法開啟操作視窗。") from exc
 
+    # Light app shell (timeline) paired with a dark console (live log).
+    ACCENT = "#0E6E78"
+    ACCENT_WEAK = "#CDE6E8"
+    LINE = "#C7CFD8"
+    SURFACE = "#FFFFFF"
+    OK_C = "#1F7A4D"
+    UN_C = "#586472"
+    SK_C = "#9A6712"
+    CON_BG = "#0B1015"
+    CON_FG = "#95A1AD"
+
     root = tk.Tk()
     root.title(APP_NAME)
-    root.geometry("760x590")
-    root.minsize(640, 540)
+    root.geometry("960x620")
+    root.minsize(880, 580)
 
     style = ttk.Style(root)
     if "vista" in style.theme_names():
         style.theme_use("vista")
-    style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
-    style.configure("Subtitle.TLabel", font=("Segoe UI", 10))
-    style.configure("Section.TLabel", font=("Segoe UI", 10, "bold"))
-    style.configure("Hint.TLabel", font=("Segoe UI", 9))
-    style.configure("ResultValue.TLabel", font=("Segoe UI", 15, "bold"))
-    style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), padding=(18, 8))
-    style.configure("Action.TButton", padding=(10, 6))
+    frame_bg = style.lookup("TFrame", "background") or "#F0F0F0"
+    root.configure(bg=frame_bg)
+    style.configure("Title.TLabel", font=("Segoe UI", 17, "bold"))
+    style.configure("Subtitle.TLabel", font=("Segoe UI", 9), foreground=UN_C)
+    style.configure("Section.TLabel", font=("Segoe UI", 11, "bold"))
+    style.configure("Hint.TLabel", font=("Segoe UI", 9), foreground="#7A8593")
+    style.configure("Done.TLabel", font=("Segoe UI", 9), foreground=UN_C)
+    style.configure("Con.TLabel", font=("Segoe UI", 10, "bold"))
+    style.configure("Ok.TLabel", font=("Segoe UI", 13, "bold"), foreground=OK_C)
+    style.configure("Un.TLabel", font=("Segoe UI", 13, "bold"), foreground=UN_C)
+    style.configure("Sk.TLabel", font=("Segoe UI", 13, "bold"), foreground=SK_C)
+    style.configure("TallyCap.TLabel", font=("Segoe UI", 8), foreground="#7A8593")
+    style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 7))
+    style.configure("Action.TButton", padding=(9, 5))
+
+    mono = tkfont.Font(family="Consolas", size=9)
 
     po_var = tk.StringVar()
     ship_var = tk.StringVar()
-    status_var = tk.StringVar(value="請先選擇兩個檔案")
-    result_path_var = tk.StringVar()
+    stage_status_var = tk.StringVar(value="選好兩個檔案後即可開始")
+    done_status_var = tk.StringVar(value="尚未處理")
+    result_path_var = tk.StringVar(value="尚無結果檔")
     updated_var = tk.StringVar(value="0")
     unchanged_var = tk.StringVar(value="0")
     skipped_var = tk.StringVar(value="0")
-    last_result = {"output": None, "log": None}
+    q = queue.Queue()
+    ui = {"output": None, "log": None, "processing": False}
 
-    main_frame = ttk.Frame(root, padding=(28, 24, 28, 22))
-    main_frame.pack(fill="both", expand=True)
-    main_frame.columnconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(1, weight=1)
 
-    ttk.Label(main_frame, text=APP_NAME, style="Title.TLabel").grid(
-        row=0, column=0, sticky="w"
-    )
+    header = ttk.Frame(root, padding=(26, 20, 26, 12))
+    header.grid(row=0, column=0, sticky="ew")
+    ttk.Label(header, text=APP_NAME, style="Title.TLabel").pack(anchor="w")
     ttk.Label(
-        main_frame,
-        text="依出貨清單更新指定項目的數量與金額。原始採購單不會被覆寫。",
+        header,
+        text="依出貨清單更新指定項目的數量與金額 · 原始採購單不會被覆寫",
         style="Subtitle.TLabel",
-    ).grid(row=1, column=0, sticky="w", pady=(6, 18))
+    ).pack(anchor="w", pady=(4, 0))
 
-    ttk.Separator(main_frame).grid(row=2, column=0, sticky="ew", pady=(0, 18))
+    body = ttk.Frame(root, padding=(26, 0, 26, 20))
+    body.grid(row=1, column=0, sticky="nsew")
+    body.columnconfigure(0, weight=0, minsize=380)
+    body.columnconfigure(1, weight=1)
+    body.rowconfigure(0, weight=1)
 
-    files_frame = ttk.Frame(main_frame)
-    files_frame.grid(row=3, column=0, sticky="ew")
-    files_frame.columnconfigure(0, weight=1)
+    # ---------------- left: timeline spine ----------------
+    timeline = ttk.Frame(body)
+    timeline.grid(row=0, column=0, sticky="nsew", padx=(0, 24))
+    timeline.columnconfigure(1, weight=1)
 
-    def update_ready_state():
-        ready = bool(po_var.get() and ship_var.get())
-        if ready:
+    nodes = {}
+    NODE_W = 38
+
+    def make_stage(name, row, is_first=False, is_last=False):
+        canvas = tk.Canvas(
+            timeline, width=NODE_W, highlightthickness=0, bd=0, bg=frame_bg
+        )
+        canvas.grid(row=row, column=0, sticky="ns")
+        content = ttk.Frame(timeline, padding=(8, 12, 0, 14))
+        content.grid(row=row, column=1, sticky="nwe")
+        content.columnconfigure(0, weight=1)
+        node = {"canvas": canvas, "state": "pending"}
+
+        def redraw(_event=None):
+            canvas.delete("all")
+            w = int(canvas.winfo_width()) or NODE_W
+            h = int(canvas.winfo_height()) or 1
+            cx, cy, r = w // 2, 22, 8
+            top = cy if is_first else 0
+            bot = cy if is_last else h
+            if bot > top:
+                canvas.create_line(cx, top, cx, bot, fill=LINE, width=2)
+            st = node["state"]
+            if st == "done":
+                canvas.create_oval(
+                    cx - r, cy - r, cx + r, cy + r, fill=ACCENT, outline=ACCENT
+                )
+                canvas.create_line(
+                    cx - 3, cy, cx - 1, cy + 3, cx + 4, cy - 4, fill="white", width=2
+                )
+            elif st == "active":
+                canvas.create_oval(
+                    cx - r - 3, cy - r - 3, cx + r + 3, cy + r + 3,
+                    outline=ACCENT_WEAK, width=3,
+                )
+                canvas.create_oval(
+                    cx - r, cy - r, cx + r, cy + r, fill=SURFACE, outline=ACCENT, width=2
+                )
+                canvas.create_oval(cx - 3, cy - 3, cx + 3, cy + 3, fill=ACCENT, outline=ACCENT)
+            else:
+                canvas.create_oval(
+                    cx - r, cy - r, cx + r, cy + r, fill=SURFACE, outline=LINE, width=2
+                )
+
+        canvas.bind("<Configure>", redraw)
+        node["redraw"] = redraw
+        nodes[name] = node
+        return content
+
+    def set_state(name, st):
+        nodes[name]["state"] = st
+        nodes[name]["redraw"]()
+
+    stage_po = make_stage("po", 0, is_first=True)
+    ttk.Label(stage_po, text="採購單檔案", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(stage_po, text="內容為 HTML 的 .xls", style="Hint.TLabel").grid(
+        row=1, column=0, sticky="w", pady=(1, 6)
+    )
+    po_row = ttk.Frame(stage_po)
+    po_row.grid(row=2, column=0, sticky="ew")
+    po_row.columnconfigure(0, weight=1)
+    ttk.Entry(po_row, textvariable=po_var, state="readonly").grid(row=0, column=0, sticky="ew", padx=(0, 8))
+    ttk.Button(po_row, text="選擇", style="Action.TButton", command=lambda: choose_po()).grid(row=0, column=1)
+
+    stage_ship = make_stage("ship", 1)
+    ttk.Label(stage_ship, text="出貨清單", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(stage_ship, text=".xlsx 或 .csv", style="Hint.TLabel").grid(
+        row=1, column=0, sticky="w", pady=(1, 6)
+    )
+    ship_row = ttk.Frame(stage_ship)
+    ship_row.grid(row=2, column=0, sticky="ew")
+    ship_row.columnconfigure(0, weight=1)
+    ttk.Entry(ship_row, textvariable=ship_var, state="readonly").grid(row=0, column=0, sticky="ew", padx=(0, 8))
+    ttk.Button(ship_row, text="選擇", style="Action.TButton", command=lambda: choose_ship()).grid(row=0, column=1)
+
+    stage_run = make_stage("run", 2)
+    ttk.Label(stage_run, text="處理", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(stage_run, textvariable=stage_status_var, style="Hint.TLabel").grid(
+        row=1, column=0, sticky="w", pady=(1, 8)
+    )
+    run_button = ttk.Button(stage_run, text="開始處理", style="Primary.TButton", command=lambda: start_processing())
+    run_button.grid(row=2, column=0, sticky="w")
+    run_button.state(["disabled"])
+
+    stage_done = make_stage("done", 3, is_last=True)
+    ttk.Label(stage_done, text="完成", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(stage_done, textvariable=done_status_var, style="Done.TLabel").grid(
+        row=1, column=0, sticky="w", pady=(1, 8)
+    )
+    tallies = ttk.Frame(stage_done)
+    tallies.grid(row=2, column=0, sticky="w")
+
+    def add_tally(col, cap, var, val_style):
+        cell = ttk.Frame(tallies)
+        cell.grid(row=0, column=col, padx=(0, 18))
+        ttk.Label(cell, textvariable=var, style=val_style).pack(anchor="w")
+        ttk.Label(cell, text=cap, style="TallyCap.TLabel").pack(anchor="w")
+
+    add_tally(0, "已更新", updated_var, "Ok.TLabel")
+    add_tally(1, "原值相同", unchanged_var, "Un.TLabel")
+    add_tally(2, "已略過", skipped_var, "Sk.TLabel")
+
+    ttk.Label(
+        timeline,
+        text="比對規則：採購單號、項次與料號完全相同才會更新；未列入或不相符的項目保留原值。",
+        wraplength=330,
+        style="Hint.TLabel",
+    ).grid(row=4, column=1, sticky="w", pady=(16, 0))
+
+    # ---------------- right: live console ----------------
+    console = ttk.Frame(body)
+    console.grid(row=0, column=1, sticky="nsew")
+    console.columnconfigure(0, weight=1)
+    console.rowconfigure(1, weight=1)
+
+    ttk.Label(console, text="處理紀錄", style="Con.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+    text_wrap = tk.Frame(console, bg=LINE)
+    text_wrap.grid(row=1, column=0, sticky="nsew")
+    text_wrap.columnconfigure(0, weight=1)
+    text_wrap.rowconfigure(0, weight=1)
+    log_text = tk.Text(
+        text_wrap, bg=CON_BG, fg=CON_FG, insertbackground=CON_FG, relief="flat",
+        highlightthickness=0, bd=0, padx=12, pady=10, wrap="word", font=mono,
+        state="disabled", height=10,
+    )
+    log_text.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+    scroll = ttk.Scrollbar(text_wrap, orient="vertical", command=log_text.yview)
+    scroll.grid(row=0, column=1, sticky="ns", padx=(0, 1), pady=1)
+    log_text.configure(yscrollcommand=scroll.set)
+    for tag, color in (
+        ("prompt", "#38B9C2"), ("cmd", "#E6ECF2"), ("msg", CON_FG),
+        ("lvl_OK", "#52C088"), ("lvl_SKIP", "#D6A64A"), ("lvl_WARN", "#D6A64A"),
+        ("lvl_INFO", "#8FE1E7"), ("lvl_ERR", "#E36C63"), ("sys", "#5E6975"),
+    ):
+        log_text.tag_configure(tag, foreground=color)
+
+    ttk.Label(console, textvariable=result_path_var, wraplength=520, style="Hint.TLabel").grid(
+        row=2, column=0, sticky="w", pady=(10, 6)
+    )
+    result_actions = ttk.Frame(console)
+    result_actions.grid(row=3, column=0, sticky="w")
+
+    def open_path(path):
+        if not path:
+            return
+        try:
+            os.startfile(str(path))
+        except OSError as exc:
+            messagebox.showerror("無法開啟", str(exc), parent=root)
+
+    open_result_button = ttk.Button(
+        result_actions, text="開啟結果檔", style="Action.TButton",
+        command=lambda: open_path(ui["output"]),
+    )
+    open_result_button.grid(row=0, column=0, padx=(0, 8))
+    open_folder_button = ttk.Button(
+        result_actions, text="開啟所在資料夾", style="Action.TButton",
+        command=lambda: open_path(Path(ui["output"]).parent if ui["output"] else None),
+    )
+    open_folder_button.grid(row=0, column=1, padx=(0, 8))
+    open_log_button = ttk.Button(
+        result_actions, text="查看詳細紀錄", style="Action.TButton",
+        command=lambda: open_path(ui["log"]),
+    )
+    open_log_button.grid(row=0, column=2)
+    result_buttons = (open_result_button, open_folder_button, open_log_button)
+    for _button in result_buttons:
+        _button.state(["disabled"])
+
+    def con_write(segments):
+        log_text.configure(state="normal")
+        for txt, tag in segments:
+            log_text.insert("end", txt, tag)
+        log_text.see("end")
+        log_text.configure(state="disabled")
+
+    def con_clear():
+        log_text.configure(state="normal")
+        log_text.delete("1.0", "end")
+        log_text.configure(state="disabled")
+
+    def con_cmd(line):
+        con_write([("› ", "prompt"), (line + "\n", "cmd")])
+
+    def con_log(level, msg):
+        tag = {"OK": "lvl_OK", "SKIP": "lvl_SKIP", "WARN": "lvl_WARN", "INFO": "lvl_INFO"}.get(
+            level, "lvl_INFO"
+        )
+        con_write([(f"[{level}] ", tag), (msg + "\n", "msg")])
+
+    def update_flow():
+        if ui["processing"]:
+            return
+        has_po = bool(po_var.get())
+        has_ship = bool(ship_var.get())
+        set_state("po", "done" if has_po else "active")
+        set_state("ship", ("done" if has_ship else "active") if has_po else "pending")
+        if has_po and has_ship:
+            set_state("run", "active")
             run_button.state(["!disabled"])
-            status_var.set("檔案已就緒，可以開始處理")
+            stage_status_var.set("兩個檔案已就緒，可以開始")
         else:
+            set_state("run", "pending")
             run_button.state(["disabled"])
-            status_var.set("請先選擇兩個檔案")
+            stage_status_var.set("選好兩個檔案後即可開始")
+        set_state("done", "pending")
 
     def choose_po():
         initial = Path(po_var.get()).parent if po_var.get() else script_dir()
         selected = filedialog.askopenfilename(
-            parent=root,
-            title="選擇採購單檔案",
-            initialdir=str(initial),
-            filetypes=[
-                ("HTML 格式採購單", "*.xls;*.html;*.htm"),
-                ("所有檔案", "*.*"),
-            ],
+            parent=root, title="選擇採購單檔案", initialdir=str(initial),
+            filetypes=[("HTML 格式採購單", "*.xls;*.html;*.htm"), ("所有檔案", "*.*")],
         )
         if selected:
             po_var.set(selected)
-            update_ready_state()
+            update_flow()
 
     def choose_ship():
         if ship_var.get():
@@ -612,9 +850,7 @@ def launch_gui():
         else:
             initial = script_dir()
         selected = filedialog.askopenfilename(
-            parent=root,
-            title="選擇出貨清單",
-            initialdir=str(initial),
+            parent=root, title="選擇出貨清單", initialdir=str(initial),
             filetypes=[
                 ("出貨清單", "*.xlsx;*.csv"),
                 ("Excel 活頁簿", "*.xlsx"),
@@ -624,154 +860,106 @@ def launch_gui():
         )
         if selected:
             ship_var.set(selected)
-            update_ready_state()
+            update_flow()
 
-    def add_file_row(row, title, hint, variable, command):
-        frame = ttk.Frame(files_frame)
-        frame.grid(row=row, column=0, sticky="ew", pady=(0, 16))
-        frame.columnconfigure(0, weight=1)
-        ttk.Label(frame, text=title, style="Section.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(frame, text=hint, style="Hint.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(2, 6)
-        )
-        ttk.Entry(frame, textvariable=variable, state="readonly").grid(
-            row=2, column=0, sticky="ew", padx=(0, 10)
-        )
-        ttk.Button(frame, text="選擇檔案", command=command, style="Action.TButton").grid(
-            row=2, column=1, sticky="e"
-        )
-
-    add_file_row(0, "1. 採購單檔案", "支援內容為 HTML 的 .xls", po_var, choose_po)
-    add_file_row(1, "2. 出貨清單", "支援 .xlsx 或 .csv", ship_var, choose_ship)
-
-    rule_text = (
-        "比對規則：採購單號、項次與料號完全相同才會更新；"
-        "未列入或不相符的項目保留原值。"
-    )
-    ttk.Label(main_frame, text=rule_text, wraplength=680, style="Hint.TLabel").grid(
-        row=4, column=0, sticky="w", pady=(0, 18)
-    )
-
-    action_frame = ttk.Frame(main_frame)
-    action_frame.grid(row=5, column=0, sticky="ew")
-    action_frame.columnconfigure(0, weight=1)
-    ttk.Label(action_frame, textvariable=status_var, style="Hint.TLabel").grid(
-        row=0, column=0, sticky="w"
-    )
-
-    result_frame = ttk.LabelFrame(main_frame, text="處理結果", padding=(16, 12))
-    result_frame.columnconfigure(0, weight=1)
-
-    stats_frame = ttk.Frame(result_frame)
-    stats_frame.grid(row=0, column=0, sticky="ew")
-    for column in range(3):
-        stats_frame.columnconfigure(column, weight=1)
-
-    def add_stat(column, label, variable):
-        cell = ttk.Frame(stats_frame)
-        cell.grid(row=0, column=column, sticky="ew")
-        ttk.Label(cell, text=label, style="Hint.TLabel").pack(anchor="center")
-        ttk.Label(cell, textvariable=variable, style="ResultValue.TLabel").pack(
-            anchor="center", pady=(2, 0)
-        )
-
-    add_stat(0, "已更新", updated_var)
-    add_stat(1, "原值相同", unchanged_var)
-    add_stat(2, "已略過", skipped_var)
-
-    ttk.Label(result_frame, text="結果檔", style="Section.TLabel").grid(
-        row=1, column=0, sticky="w", pady=(14, 3)
-    )
-    ttk.Label(
-        result_frame,
-        textvariable=result_path_var,
-        wraplength=650,
-        justify="left",
-        style="Hint.TLabel",
-    ).grid(row=2, column=0, sticky="w")
-
-    result_actions = ttk.Frame(result_frame)
-    result_actions.grid(row=3, column=0, sticky="w", pady=(12, 0))
-
-    def open_path(path):
-        try:
-            os.startfile(str(path))
-        except OSError as exc:
-            messagebox.showerror("無法開啟", str(exc), parent=root)
-
-    open_result_button = ttk.Button(
-        result_actions,
-        text="開啟結果檔",
-        command=lambda: open_path(last_result["output"]),
-        style="Action.TButton",
-    )
-    open_result_button.grid(row=0, column=0, padx=(0, 8))
-    open_folder_button = ttk.Button(
-        result_actions,
-        text="開啟所在資料夾",
-        command=lambda: open_path(Path(last_result["output"]).parent),
-        style="Action.TButton",
-    )
-    open_folder_button.grid(row=0, column=1, padx=(0, 8))
-    open_log_button = ttk.Button(
-        result_actions,
-        text="查看詳細紀錄",
-        command=lambda: open_path(last_result["log"]),
-        style="Action.TButton",
-    )
-    open_log_button.grid(row=0, column=2)
-
-    def run_selected_files():
+    def start_processing():
+        if ui["processing"] or not (po_var.get() and ship_var.get()):
+            return
+        ui["processing"] = True
         run_button.state(["disabled"])
-        result_frame.grid_remove()
-        status_var.set("處理中…")
+        for _button in result_buttons:
+            _button.state(["disabled"])
+        set_state("po", "done")
+        set_state("ship", "done")
+        set_state("run", "active")
+        set_state("done", "pending")
+        stage_status_var.set("處理中…")
+        done_status_var.set("處理中…")
+        for var in (updated_var, unchanged_var, skipped_var):
+            var.set("0")
+        result_path_var.set("處理中…")
+        con_clear()
+        con_cmd(f"採購單 = {Path(po_var.get()).name}")
+        con_cmd(f"出貨清單 = {Path(ship_var.get()).name}")
+        con_cmd("開始處理…")
         root.configure(cursor="wait")
-        root.update_idletasks()
+
+        po_path = Path(po_var.get())
+        ship_path = Path(ship_var.get())
+
+        def worker():
+            try:
+                result = run_conversion(
+                    po_path, ship_path, on_log=lambda lv, m: q.put(("log", lv, m))
+                )
+            except Exception as exc:  # noqa: BLE001 — surfaced to the user below
+                q.put(("error", exc))
+            else:
+                q.put(("done", result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        root.after(40, drain_queue)
+
+    def drain_queue():
         try:
-            result = run_conversion(Path(po_var.get()), Path(ship_var.get()))
-        except Exception as exc:
-            status_var.set("處理失敗，檔案未完成輸出")
-            messagebox.showerror(
-                "處理失敗",
-                f"請檢查選擇的檔案與內容。\n\n詳細錯誤：{exc}",
+            while True:
+                item = q.get_nowait()
+                if item[0] == "log":
+                    con_log(item[1], item[2])
+                elif item[0] == "done":
+                    finish_ok(item[1])
+                elif item[0] == "error":
+                    finish_err(item[1])
+        except queue.Empty:
+            pass
+        if ui["processing"]:
+            root.after(40, drain_queue)
+
+    def finish_ok(result):
+        ui["processing"] = False
+        root.configure(cursor="")
+        stats = result["stats"]
+        skipped = stats["skipped_part_mismatch"] + stats["skipped_invalid"] + stats["miss"]
+        updated_var.set(str(stats["updated"]))
+        unchanged_var.set(str(stats["unchanged"]))
+        skipped_var.set(str(skipped))
+        ui["output"] = result["output"]
+        ui["log"] = result["log"]
+        result_path_var.set(str(result["output"]))
+        set_state("run", "done")
+        set_state("done", "done")
+        elapsed = result["elapsed"]
+        done_status_var.set(f"處理完成（{elapsed:.2f} 秒）")
+        stage_status_var.set("已完成")
+        con_write([("── 完成 ", "sys"), (f"{elapsed:.2f}s\n", "sys")])
+        for _button in result_buttons:
+            _button.state(["!disabled"])
+        run_button.state(["!disabled"])
+        if result["html_warning"]:
+            messagebox.showwarning(
+                "格式提醒",
+                "採購單檔案不是標準 HTML 開頭，請務必檢查輸出結果。",
                 parent=root,
             )
-        else:
-            stats = result["stats"]
-            skipped = (
-                stats["skipped_part_mismatch"]
-                + stats["skipped_invalid"]
-                + stats["miss"]
-            )
-            updated_var.set(str(stats["updated"]))
-            unchanged_var.set(str(stats["unchanged"]))
-            skipped_var.set(str(skipped))
-            result_path_var.set(str(result["output"]))
-            last_result["output"] = result["output"]
-            last_result["log"] = result["log"]
-            status_var.set(f"處理完成（{result['elapsed']:.2f} 秒）")
-            result_frame.grid(row=6, column=0, sticky="ew", pady=(18, 0))
-            if result["html_warning"]:
-                messagebox.showwarning(
-                    "格式提醒",
-                    "採購單檔案不是標準 HTML 開頭，請務必檢查輸出結果。",
-                    parent=root,
-                )
-        finally:
-            root.configure(cursor="")
-            run_button.state(["!disabled"])
 
-    run_button = ttk.Button(
-        action_frame,
-        text="開始處理",
-        command=run_selected_files,
-        style="Primary.TButton",
-    )
-    run_button.grid(row=0, column=1, sticky="e")
-    run_button.state(["disabled"])
+    def finish_err(exc):
+        ui["processing"] = False
+        root.configure(cursor="")
+        set_state("run", "active")
+        set_state("done", "pending")
+        con_write([("[錯誤] ", "lvl_ERR"), (f"{exc}\n", "msg")])
+        done_status_var.set("處理失敗")
+        stage_status_var.set("處理失敗，請檢查檔案")
+        result_path_var.set("尚無結果檔")
+        run_button.state(["!disabled"])
+        messagebox.showerror(
+            "處理失敗",
+            f"請檢查選擇的檔案與內容。\n\n詳細錯誤：{exc}",
+            parent=root,
+        )
 
+    con_write([("等待開始…\n", "sys")])
+    root.after(60, update_flow)
     root.mainloop()
 
 
