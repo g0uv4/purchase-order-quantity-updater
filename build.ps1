@@ -11,6 +11,7 @@ $source = Join-Path $projectRoot "採購單大量修改數量與總價.py"
 $distDir = Join-Path $projectRoot "dist"
 $buildDir = Join-Path $projectRoot "build"
 $appName = "採購單數量與金額調整工具"
+$assetBaseName = "purchase-order-quantity-updater"
 
 if (-not (Test-Path -LiteralPath $venvPython)) {
     & $Python -m venv $venvDir
@@ -33,7 +34,7 @@ if ($LASTEXITCODE -ne 0) { throw "安裝建置套件失敗" }
     $source
 if ($LASTEXITCODE -ne 0) { throw "建立執行檔失敗" }
 
-$releaseDir = Join-Path $distDir "$appName-$Version-win64"
+$releaseDir = Join-Path $distDir "$assetBaseName-$Version-win64"
 if (Test-Path -LiteralPath $releaseDir) {
     $resolvedDist = [System.IO.Path]::GetFullPath($distDir).TrimEnd('\') + '\'
     $resolvedRelease = [System.IO.Path]::GetFullPath($releaseDir)
@@ -48,11 +49,14 @@ Copy-Item -LiteralPath (Join-Path $distDir "$appName.exe") -Destination $release
 Copy-Item -LiteralPath (Join-Path $projectRoot "出貨清單_範本.xlsx") -Destination $releaseDir
 Copy-Item -LiteralPath (Join-Path $projectRoot "使用說明.txt") -Destination $releaseDir
 
-$zipPath = Join-Path $distDir "$appName-$Version-win64.zip"
+$exeAssetPath = Join-Path $distDir "$assetBaseName.exe"
+Copy-Item -LiteralPath (Join-Path $distDir "$appName.exe") -Destination $exeAssetPath -Force
+
+$zipPath = Join-Path $distDir "$assetBaseName-$Version-win64.zip"
 if (Test-Path -LiteralPath $zipPath) {
     [System.IO.File]::Delete([System.IO.Path]::GetFullPath($zipPath))
 }
 Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
 
-Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $distDir "$appName.exe"), $zipPath |
+Get-FileHash -Algorithm SHA256 -LiteralPath $exeAssetPath, $zipPath |
     Select-Object Path, Hash
