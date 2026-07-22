@@ -5,6 +5,7 @@
 *.log
 *.log.txt
 !出貨清單_範本.xlsx
+!採購單_範本.xls
 private-data/
 
 # Python and build artifacts

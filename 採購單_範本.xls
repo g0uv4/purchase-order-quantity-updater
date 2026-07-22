@@ -1,0 +1,29 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>採購單範本 (示範資料)</title>
+</head>
+<body>
+<p>本檔為全合成示範資料，僅供測試工具流程之用，與任何真實採購無關。</p>
+<table border="1">
+<tr><td><span>採購單號:</span></td><td><span>PO-DEMO-001</span></td></tr>
+<tr><td><span>供應廠商:</span></td><td><span>SAMPLE SEMICONDUCTOR INC. (示範資料)</span></td></tr>
+<tr><td><span>聯絡人:</span></td><td><span>Demo User  demo@example.com</span></td></tr>
+<tr><td><span>幣別:</span></td><td><span>USD</span></td></tr>
+<tr><td><span>項次</span></td><td><span>料件編號 / 品名規格</span></td><td><span>單位</span></td><td><span>數量</span></td><td><span>未稅單價</span></td><td><span>未稅金額</span></td><td><span>交貨日</span></td></tr>
+<tr><td><span>1</span></td><td><span>ITEM-DEMO-A</span></td><td><span>PCS</span></td><td><span>1,000</span></td><td><span>2.50</span></td><td><span>2,500.00</span></td><td><span>17-FEB-25</span></td><td><span>Demo Widget Alpha</span></td></tr>
+<tr><td><span>2</span></td><td><span>ITEM-DEMO-B</span></td><td><span>PCS</span></td><td><span>500</span></td><td><span>1.00</span></td><td><span>500.00</span></td><td><span>26-MAR-25</span></td><td><span>Demo Widget Beta</span></td></tr>
+<tr><td><span>3</span></td><td><span>ITEM-DEMO-C</span></td><td><span>PCS</span></td><td><span>300</span></td><td><span>4.00</span></td><td><span>1,200.00</span></td><td><span>02-APR-25</span></td><td><span>Demo Widget Gamma</span></td></tr>
+<tr><td><span>採購金額合計:</span></td><td><span>4,200.00</span></td></tr>
+<tr><td><span>&nbsp;</span></td><td><span>&nbsp;</span></td></tr>
+<tr><td><span>採購單號:</span></td><td><span>PO-DEMO-002</span></td></tr>
+<tr><td><span>供應廠商:</span></td><td><span>SAMPLE SEMICONDUCTOR INC. (示範資料)</span></td></tr>
+<tr><td><span>聯絡人:</span></td><td><span>Demo User  demo@example.com</span></td></tr>
+<tr><td><span>幣別:</span></td><td><span>USD</span></td></tr>
+<tr><td><span>項次</span></td><td><span>料件編號 / 品名規格</span></td><td><span>單位</span></td><td><span>數量</span></td><td><span>未稅單價</span></td><td><span>未稅金額</span></td><td><span>交貨日</span></td></tr>
+<tr><td><span>1</span></td><td><span>ITEM-DEMO-D</span></td><td><span>PCS</span></td><td><span>800</span></td><td><span>3.00</span></td><td><span>2,400.00</span></td><td><span>13-JAN-25</span></td><td><span>Demo Widget Delta</span></td></tr>
+<tr><td><span>採購金額合計:</span></td><td><span>2,400.00</span></td></tr>
+<tr><td><span>&nbsp;</span></td><td><span>&nbsp;</span></td></tr>
+</table>
+</body>
+</html>

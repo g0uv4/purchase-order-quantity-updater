@@ -46,6 +46,7 @@ if (Test-Path -LiteralPath $releaseDir) {
 
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $distDir "$appName.exe") -Destination $releaseDir
+Copy-Item -LiteralPath (Join-Path $projectRoot "採購單_範本.xls") -Destination $releaseDir
 Copy-Item -LiteralPath (Join-Path $projectRoot "出貨清單_範本.xlsx") -Destination $releaseDir
 Copy-Item -LiteralPath (Join-Path $projectRoot "使用說明.txt") -Destination $releaseDir
 
