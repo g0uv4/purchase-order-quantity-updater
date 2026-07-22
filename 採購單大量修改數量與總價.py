@@ -554,41 +554,169 @@ def launch_gui():
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("此環境無法開啟操作視窗。") from exc
 
-    # Light app shell (timeline) paired with a dark console (live log).
-    ACCENT = "#0E6E78"
-    ACCENT_WEAK = "#CDE6E8"
-    LINE = "#C7CFD8"
-    SURFACE = "#FFFFFF"
-    OK_C = "#1F7A4D"
-    UN_C = "#586472"
-    SK_C = "#9A6712"
-    CON_BG = "#0B1015"
-    CON_FG = "#95A1AD"
+    # Soft light shell (timeline) paired with a soft-dark console (live log).
+    PAGE = "#F4F6F9"
+    CARD = "#FFFFFF"
+    INK = "#232A32"
+    MUTED = "#5E6A77"
+    HINT = "#98A2AE"
+    LINE = "#E4E8EE"
+    LINE_STRONG = "#D6DCE4"
+    ACCENT = "#12808B"
+    ACCENT_DK = "#0E6A73"
+    ACCENT_SOFT = "#E1EFF0"
+    OK_C = "#2E9C6A"
+    UN_C = "#5E6A77"
+    SK_C = "#B5842E"
+    CON_BG = "#1A2029"
+    CON_EDGE = "#2B333E"
+    CON_FG = "#A7B2BE"
 
     root = tk.Tk()
     root.title(APP_NAME)
-    root.geometry("960x620")
-    root.minsize(880, 580)
+    root.geometry("940x600")
+    root.minsize(820, 540)
+    root.configure(bg=PAGE)
+
+    def pick_font(prefs, size, weight="normal"):
+        try:
+            families = set(tkfont.families(root))
+        except Exception:  # pragma: no cover - defensive only
+            families = set()
+        for name in prefs:
+            if name in families:
+                return tkfont.Font(root=root, family=name, size=size, weight=weight)
+        return tkfont.Font(root=root, size=size, weight=weight)
+
+    ui_prefs = ["Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", "Noto Sans TC"]
+    mono_prefs = ["Cascadia Mono", "Cascadia Code", "Consolas", "Courier New"]
+    f_title = pick_font(ui_prefs, 18, "bold")
+    f_sub = pick_font(ui_prefs, 10)
+    f_section = pick_font(ui_prefs, 12, "bold")
+    f_hint = pick_font(ui_prefs, 9)
+    f_cap = pick_font(ui_prefs, 8)
+    f_num = pick_font(ui_prefs, 16, "bold")
+    f_btn = pick_font(ui_prefs, 10, "bold")
+    f_btn_sm = pick_font(ui_prefs, 9)
+    f_mono = pick_font(mono_prefs, 10)
 
     style = ttk.Style(root)
-    if "vista" in style.theme_names():
-        style.theme_use("vista")
-    frame_bg = style.lookup("TFrame", "background") or "#F0F0F0"
-    root.configure(bg=frame_bg)
-    style.configure("Title.TLabel", font=("Segoe UI", 17, "bold"))
-    style.configure("Subtitle.TLabel", font=("Segoe UI", 9), foreground=UN_C)
-    style.configure("Section.TLabel", font=("Segoe UI", 11, "bold"))
-    style.configure("Hint.TLabel", font=("Segoe UI", 9), foreground="#7A8593")
-    style.configure("Done.TLabel", font=("Segoe UI", 9), foreground=UN_C)
-    style.configure("Con.TLabel", font=("Segoe UI", 10, "bold"))
-    style.configure("Ok.TLabel", font=("Segoe UI", 13, "bold"), foreground=OK_C)
-    style.configure("Un.TLabel", font=("Segoe UI", 13, "bold"), foreground=UN_C)
-    style.configure("Sk.TLabel", font=("Segoe UI", 13, "bold"), foreground=SK_C)
-    style.configure("TallyCap.TLabel", font=("Segoe UI", 8), foreground="#7A8593")
-    style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), padding=(16, 7))
-    style.configure("Action.TButton", padding=(9, 5))
+    if "clam" in style.theme_names():
+        style.theme_use("clam")
+    style.configure("TFrame", background=PAGE)
+    style.configure("TLabel", background=PAGE, foreground=INK)
+    style.configure("Title.TLabel", font=f_title, foreground=INK)
+    style.configure("Subtitle.TLabel", font=f_sub, foreground=MUTED)
+    style.configure("Section.TLabel", font=f_section, foreground=INK)
+    style.configure("Hint.TLabel", font=f_hint, foreground=HINT)
+    style.configure("Done.TLabel", font=f_hint, foreground=MUTED)
+    style.configure("Con.TLabel", font=f_section, foreground=INK)
+    style.configure("Ok.TLabel", font=f_num, foreground=OK_C)
+    style.configure("Un.TLabel", font=f_num, foreground=UN_C)
+    style.configure("Sk.TLabel", font=f_num, foreground=SK_C)
+    style.configure("TallyCap.TLabel", font=f_cap, foreground=HINT)
+    style.configure(
+        "Soft.TEntry",
+        fieldbackground=CARD, background=CARD, foreground=MUTED,
+        bordercolor=LINE_STRONG, lightcolor=LINE_STRONG, darkcolor=LINE_STRONG,
+        relief="flat", padding=7,
+    )
+    style.map(
+        "Soft.TEntry",
+        fieldbackground=[("readonly", CARD)],
+        bordercolor=[("focus", ACCENT)],
+        lightcolor=[("focus", ACCENT)],
+        darkcolor=[("focus", ACCENT)],
+    )
 
-    mono = tkfont.Font(family="Consolas", size=9)
+    def rrect(x1, y1, x2, y2, r):
+        return [
+            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
+            x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+        ]
+
+    class RoundedButton(tk.Canvas):
+        """A flat, rounded-corner button drawn on a Canvas (ttk has no radius)."""
+
+        def __init__(self, master, text, command=None, *, variant="secondary",
+                     font=None, radius=9, padx=15, pady=7, min_width=0):
+            self._text = text
+            self._command = command
+            self._variant = variant
+            self._font = font or f_btn
+            self._radius = radius
+            self._disabled = False
+            self._hover = False
+            self._focus = False
+            width = max(self._font.measure(text) + padx * 2, min_width)
+            height = self._font.metrics("linespace") + pady * 2
+            super().__init__(
+                master, width=width, height=height, highlightthickness=0,
+                bd=0, bg=PAGE, takefocus=1, cursor="hand2",
+            )
+            self._w, self._h = width, height
+            self.bind("<Button-1>", self._click)
+            self.bind("<Return>", self._click)
+            self.bind("<space>", self._click)
+            self.bind("<Enter>", lambda _e: self._set_hover(True))
+            self.bind("<Leave>", lambda _e: self._set_hover(False))
+            self.bind("<FocusIn>", lambda _e: self._set_focus(True))
+            self.bind("<FocusOut>", lambda _e: self._set_focus(False))
+            self._render()
+
+        def _colors(self):
+            if self._variant == "primary":
+                if self._disabled:
+                    return "#C3CCD4", "#C3CCD4", "#8B95A0"
+                return (ACCENT_DK if self._hover else ACCENT), None, "#FFFFFF"
+            if self._disabled:
+                return CARD, LINE, "#AEB6C0"
+            return ("#EEF2F6" if self._hover else CARD), LINE_STRONG, INK
+
+        def _render(self):
+            self.delete("all")
+            fill, outline, fg = self._colors()
+            points = rrect(1, 1, self._w - 1, self._h - 1, self._radius)
+            self.create_polygon(
+                points, smooth=True, splinesteps=24,
+                fill=fill, outline=outline or fill,
+            )
+            if self._focus and not self._disabled:
+                ring = rrect(2, 2, self._w - 2, self._h - 2, self._radius - 1)
+                self.create_polygon(
+                    ring, smooth=True, splinesteps=24, fill="",
+                    outline=ACCENT, width=2,
+                )
+            self.create_text(
+                self._w / 2, self._h / 2, text=self._text, fill=fg, font=self._font,
+            )
+
+        def _set_hover(self, value):
+            self._hover = value and not self._disabled
+            self._render()
+
+        def _set_focus(self, value):
+            self._focus = value
+            self._render()
+
+        def _click(self, _event=None):
+            if not self._disabled and self._command:
+                self._command()
+            return "break"
+
+        def state(self, flags=None):
+            if not flags:
+                return []
+            for flag in flags:
+                if flag == "disabled":
+                    self._disabled = True
+                    self.configure(cursor="arrow")
+                elif flag == "!disabled":
+                    self._disabled = False
+                    self.configure(cursor="hand2")
+            self._hover = False
+            self._render()
+            return []
 
     po_var = tk.StringVar()
     ship_var = tk.StringVar()
@@ -625,14 +753,16 @@ def launch_gui():
     timeline.columnconfigure(1, weight=1)
 
     nodes = {}
-    NODE_W = 38
+    NODE_W = 34
 
     def make_stage(name, row, is_first=False, is_last=False):
+        # height=1 keeps the row as short as its content; without it the canvas
+        # claims its large default height and the stages spread far apart.
         canvas = tk.Canvas(
-            timeline, width=NODE_W, highlightthickness=0, bd=0, bg=frame_bg
+            timeline, width=NODE_W, height=1, highlightthickness=0, bd=0, bg=PAGE
         )
         canvas.grid(row=row, column=0, sticky="ns")
-        content = ttk.Frame(timeline, padding=(8, 12, 0, 14))
+        content = ttk.Frame(timeline, padding=(10, 7, 0, 11))
         content.grid(row=row, column=1, sticky="nwe")
         content.columnconfigure(0, weight=1)
         node = {"canvas": canvas, "state": "pending"}
@@ -641,31 +771,34 @@ def launch_gui():
             canvas.delete("all")
             w = int(canvas.winfo_width()) or NODE_W
             h = int(canvas.winfo_height()) or 1
-            cx, cy, r = w // 2, 22, 8
+            cx, cy, r = w // 2, 16, 7
             top = cy if is_first else 0
             bot = cy if is_last else h
             if bot > top:
-                canvas.create_line(cx, top, cx, bot, fill=LINE, width=2)
+                canvas.create_line(cx, top, cx, bot, fill=LINE_STRONG, width=2)
             st = node["state"]
             if st == "done":
                 canvas.create_oval(
                     cx - r, cy - r, cx + r, cy + r, fill=ACCENT, outline=ACCENT
                 )
                 canvas.create_line(
-                    cx - 3, cy, cx - 1, cy + 3, cx + 4, cy - 4, fill="white", width=2
+                    cx - 3, cy + 1, cx - 1, cy + 3, cx + 4, cy - 3,
+                    fill="white", width=2, capstyle="round", joinstyle="round",
                 )
             elif st == "active":
                 canvas.create_oval(
-                    cx - r - 3, cy - r - 3, cx + r + 3, cy + r + 3,
-                    outline=ACCENT_WEAK, width=3,
+                    cx - r - 4, cy - r - 4, cx + r + 4, cy + r + 4,
+                    fill=ACCENT_SOFT, outline=ACCENT_SOFT,
                 )
                 canvas.create_oval(
-                    cx - r, cy - r, cx + r, cy + r, fill=SURFACE, outline=ACCENT, width=2
+                    cx - r, cy - r, cx + r, cy + r, fill=CARD, outline=ACCENT, width=2
                 )
-                canvas.create_oval(cx - 3, cy - 3, cx + 3, cy + 3, fill=ACCENT, outline=ACCENT)
+                canvas.create_oval(
+                    cx - 3, cy - 3, cx + 3, cy + 3, fill=ACCENT, outline=ACCENT
+                )
             else:
                 canvas.create_oval(
-                    cx - r, cy - r, cx + r, cy + r, fill=SURFACE, outline=LINE, width=2
+                    cx - r, cy - r, cx + r, cy + r, fill=CARD, outline=LINE_STRONG, width=2
                 )
 
         canvas.bind("<Configure>", redraw)
@@ -680,31 +813,42 @@ def launch_gui():
     stage_po = make_stage("po", 0, is_first=True)
     ttk.Label(stage_po, text="採購單檔案", style="Section.TLabel").grid(row=0, column=0, sticky="w")
     ttk.Label(stage_po, text="內容為 HTML 的 .xls", style="Hint.TLabel").grid(
-        row=1, column=0, sticky="w", pady=(1, 6)
+        row=1, column=0, sticky="w", pady=(2, 7)
     )
     po_row = ttk.Frame(stage_po)
     po_row.grid(row=2, column=0, sticky="ew")
     po_row.columnconfigure(0, weight=1)
-    ttk.Entry(po_row, textvariable=po_var, state="readonly").grid(row=0, column=0, sticky="ew", padx=(0, 8))
-    ttk.Button(po_row, text="選擇", style="Action.TButton", command=lambda: choose_po()).grid(row=0, column=1)
+    ttk.Entry(po_row, textvariable=po_var, state="readonly", style="Soft.TEntry").grid(
+        row=0, column=0, sticky="ew", padx=(0, 8), ipady=2
+    )
+    RoundedButton(po_row, "選擇", command=lambda: choose_po(), font=f_btn_sm, radius=8).grid(
+        row=0, column=1
+    )
 
     stage_ship = make_stage("ship", 1)
     ttk.Label(stage_ship, text="出貨清單", style="Section.TLabel").grid(row=0, column=0, sticky="w")
     ttk.Label(stage_ship, text=".xlsx 或 .csv", style="Hint.TLabel").grid(
-        row=1, column=0, sticky="w", pady=(1, 6)
+        row=1, column=0, sticky="w", pady=(2, 7)
     )
     ship_row = ttk.Frame(stage_ship)
     ship_row.grid(row=2, column=0, sticky="ew")
     ship_row.columnconfigure(0, weight=1)
-    ttk.Entry(ship_row, textvariable=ship_var, state="readonly").grid(row=0, column=0, sticky="ew", padx=(0, 8))
-    ttk.Button(ship_row, text="選擇", style="Action.TButton", command=lambda: choose_ship()).grid(row=0, column=1)
+    ttk.Entry(ship_row, textvariable=ship_var, state="readonly", style="Soft.TEntry").grid(
+        row=0, column=0, sticky="ew", padx=(0, 8), ipady=2
+    )
+    RoundedButton(ship_row, "選擇", command=lambda: choose_ship(), font=f_btn_sm, radius=8).grid(
+        row=0, column=1
+    )
 
     stage_run = make_stage("run", 2)
     ttk.Label(stage_run, text="處理", style="Section.TLabel").grid(row=0, column=0, sticky="w")
     ttk.Label(stage_run, textvariable=stage_status_var, style="Hint.TLabel").grid(
-        row=1, column=0, sticky="w", pady=(1, 8)
+        row=1, column=0, sticky="w", pady=(2, 9)
     )
-    run_button = ttk.Button(stage_run, text="開始處理", style="Primary.TButton", command=lambda: start_processing())
+    run_button = RoundedButton(
+        stage_run, "開始處理", command=lambda: start_processing(),
+        variant="primary", font=f_btn, radius=11, padx=22, pady=10,
+    )
     run_button.grid(row=2, column=0, sticky="w")
     run_button.state(["disabled"])
 
@@ -739,30 +883,43 @@ def launch_gui():
     console.columnconfigure(0, weight=1)
     console.rowconfigure(1, weight=1)
 
-    ttk.Label(console, text="處理紀錄", style="Con.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
+    ttk.Label(console, text="處理紀錄", style="Con.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-    text_wrap = tk.Frame(console, bg=LINE)
-    text_wrap.grid(row=1, column=0, sticky="nsew")
-    text_wrap.columnconfigure(0, weight=1)
-    text_wrap.rowconfigure(0, weight=1)
+    con_area = tk.Frame(console, bg=PAGE)
+    con_area.grid(row=1, column=0, sticky="nsew")
+    con_area.columnconfigure(0, weight=1)
+    con_area.rowconfigure(0, weight=1)
+    con_bg = tk.Canvas(con_area, bg=PAGE, highlightthickness=0, bd=0)
+    con_bg.place(x=0, y=0, relwidth=1, relheight=1)
     log_text = tk.Text(
-        text_wrap, bg=CON_BG, fg=CON_FG, insertbackground=CON_FG, relief="flat",
-        highlightthickness=0, bd=0, padx=12, pady=10, wrap="word", font=mono,
+        con_area, bg=CON_BG, fg=CON_FG, insertbackground=CON_FG, relief="flat",
+        highlightthickness=0, bd=0, padx=12, pady=10, wrap="word", font=f_mono,
         state="disabled", height=10,
     )
-    log_text.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-    scroll = ttk.Scrollbar(text_wrap, orient="vertical", command=log_text.yview)
-    scroll.grid(row=0, column=1, sticky="ns", padx=(0, 1), pady=1)
-    log_text.configure(yscrollcommand=scroll.set)
+    log_text.grid(row=0, column=0, sticky="nsew", padx=13, pady=13)
+    con_bg.lower()
+
+    def con_bg_redraw(_event=None):
+        con_bg.delete("all")
+        w = int(con_bg.winfo_width())
+        h = int(con_bg.winfo_height())
+        if w < 6 or h < 6:
+            return
+        con_bg.create_polygon(
+            rrect(2, 2, w - 2, h - 2, 16), smooth=True, splinesteps=32,
+            fill=CON_BG, outline=CON_EDGE,
+        )
+
+    con_bg.bind("<Configure>", con_bg_redraw)
     for tag, color in (
-        ("prompt", "#38B9C2"), ("cmd", "#E6ECF2"), ("msg", CON_FG),
-        ("lvl_OK", "#52C088"), ("lvl_SKIP", "#D6A64A"), ("lvl_WARN", "#D6A64A"),
-        ("lvl_INFO", "#8FE1E7"), ("lvl_ERR", "#E36C63"), ("sys", "#5E6975"),
+        ("prompt", "#4FC2CB"), ("cmd", "#E4EAF0"), ("msg", CON_FG),
+        ("lvl_OK", "#63C48E"), ("lvl_SKIP", "#D9AE63"), ("lvl_WARN", "#D9AE63"),
+        ("lvl_INFO", "#7FD3DB"), ("lvl_ERR", "#E8837B"), ("sys", "#6C7783"),
     ):
         log_text.tag_configure(tag, foreground=color)
 
     ttk.Label(console, textvariable=result_path_var, wraplength=520, style="Hint.TLabel").grid(
-        row=2, column=0, sticky="w", pady=(10, 6)
+        row=2, column=0, sticky="w", pady=(12, 8)
     )
     result_actions = ttk.Frame(console)
     result_actions.grid(row=3, column=0, sticky="w")
@@ -775,19 +932,20 @@ def launch_gui():
         except OSError as exc:
             messagebox.showerror("無法開啟", str(exc), parent=root)
 
-    open_result_button = ttk.Button(
-        result_actions, text="開啟結果檔", style="Action.TButton",
-        command=lambda: open_path(ui["output"]),
+    open_result_button = RoundedButton(
+        result_actions, "開啟結果檔", command=lambda: open_path(ui["output"]),
+        font=f_btn_sm, radius=8,
     )
     open_result_button.grid(row=0, column=0, padx=(0, 8))
-    open_folder_button = ttk.Button(
-        result_actions, text="開啟所在資料夾", style="Action.TButton",
+    open_folder_button = RoundedButton(
+        result_actions, "開啟所在資料夾",
         command=lambda: open_path(Path(ui["output"]).parent if ui["output"] else None),
+        font=f_btn_sm, radius=8,
     )
     open_folder_button.grid(row=0, column=1, padx=(0, 8))
-    open_log_button = ttk.Button(
-        result_actions, text="查看詳細紀錄", style="Action.TButton",
-        command=lambda: open_path(ui["log"]),
+    open_log_button = RoundedButton(
+        result_actions, "查看詳細紀錄", command=lambda: open_path(ui["log"]),
+        font=f_btn_sm, radius=8,
     )
     open_log_button.grid(row=0, column=2)
     result_buttons = (open_result_button, open_folder_button, open_log_button)
