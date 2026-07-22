@@ -654,7 +654,7 @@ def launch_gui():
                 master, width=width, height=height, highlightthickness=0,
                 bd=0, bg=PAGE, takefocus=1, cursor="hand2",
             )
-            self._w, self._h = width, height
+            self._cw, self._ch = width, height
             self.bind("<Button-1>", self._click)
             self.bind("<Return>", self._click)
             self.bind("<space>", self._click)
@@ -676,19 +676,19 @@ def launch_gui():
         def _render(self):
             self.delete("all")
             fill, outline, fg = self._colors()
-            points = rrect(1, 1, self._w - 1, self._h - 1, self._radius)
+            points = rrect(1, 1, self._cw - 1, self._ch - 1, self._radius)
             self.create_polygon(
                 points, smooth=True, splinesteps=24,
                 fill=fill, outline=outline or fill,
             )
             if self._focus and not self._disabled:
-                ring = rrect(2, 2, self._w - 2, self._h - 2, self._radius - 1)
+                ring = rrect(2, 2, self._cw - 2, self._ch - 2, self._radius - 1)
                 self.create_polygon(
                     ring, smooth=True, splinesteps=24, fill="",
                     outline=ACCENT, width=2,
                 )
             self.create_text(
-                self._w / 2, self._h / 2, text=self._text, fill=fg, font=self._font,
+                self._cw / 2, self._ch / 2, text=self._text, fill=fg, font=self._font,
             )
 
         def _set_hover(self, value):
@@ -897,7 +897,7 @@ def launch_gui():
         state="disabled", height=10,
     )
     log_text.grid(row=0, column=0, sticky="nsew", padx=13, pady=13)
-    con_bg.lower()
+    tk.Misc.lower(con_bg)
 
     def con_bg_redraw(_event=None):
         con_bg.delete("all")
