@@ -554,23 +554,23 @@ def launch_gui():
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("此環境無法開啟操作視窗。") from exc
 
-    # Soft light shell (timeline) paired with a soft-dark console (live log).
-    PAGE = "#F4F6F9"
-    CARD = "#FFFFFF"
-    INK = "#232A32"
-    MUTED = "#5E6A77"
-    HINT = "#98A2AE"
-    LINE = "#E4E8EE"
-    LINE_STRONG = "#D6DCE4"
-    ACCENT = "#12808B"
-    ACCENT_DK = "#0E6A73"
-    ACCENT_SOFT = "#E1EFF0"
-    OK_C = "#2E9C6A"
-    UN_C = "#5E6A77"
-    SK_C = "#B5842E"
-    CON_BG = "#1A2029"
-    CON_EDGE = "#2B333E"
-    CON_FG = "#A7B2BE"
+    # Warm paper shell (timeline) paired with a warm-dark console (live log).
+    PAGE = "#F3EEE5"
+    CARD = "#FBF8F2"
+    INK = "#3A322A"
+    MUTED = "#8A7B69"
+    HINT = "#A99A86"
+    LINE = "#E2D9C9"
+    LINE_STRONG = "#D6CAB6"
+    ACCENT = "#B25E38"
+    ACCENT_DK = "#96492A"
+    ACCENT_SOFT = "#EFE0D2"
+    OK_C = "#6E9A4C"
+    UN_C = "#8A7B69"
+    SK_C = "#BE8532"
+    CON_BG = "#2B2420"
+    CON_EDGE = "#3C332C"
+    CON_FG = "#D9CAB4"
 
     root = tk.Tk()
     root.title(APP_NAME)
@@ -667,11 +667,11 @@ def launch_gui():
         def _colors(self):
             if self._variant == "primary":
                 if self._disabled:
-                    return "#C3CCD4", "#C3CCD4", "#8B95A0"
+                    return "#DCD2C2", "#DCD2C2", "#A99A86"
                 return (ACCENT_DK if self._hover else ACCENT), None, "#FFFFFF"
             if self._disabled:
-                return CARD, LINE, "#AEB6C0"
-            return ("#EEF2F6" if self._hover else CARD), LINE_STRONG, INK
+                return CARD, LINE, "#B7AA96"
+            return ("#F0E7DA" if self._hover else CARD), LINE_STRONG, INK
 
         def _render(self):
             self.delete("all")
@@ -821,7 +821,7 @@ def launch_gui():
     ttk.Entry(po_row, textvariable=po_var, state="readonly", style="Soft.TEntry").grid(
         row=0, column=0, sticky="ew", padx=(0, 8), ipady=2
     )
-    RoundedButton(po_row, "選擇", command=lambda: choose_po(), font=f_btn_sm, radius=8).grid(
+    RoundedButton(po_row, "選擇", command=lambda: choose_po(), font=f_btn_sm, radius=10).grid(
         row=0, column=1
     )
 
@@ -836,7 +836,7 @@ def launch_gui():
     ttk.Entry(ship_row, textvariable=ship_var, state="readonly", style="Soft.TEntry").grid(
         row=0, column=0, sticky="ew", padx=(0, 8), ipady=2
     )
-    RoundedButton(ship_row, "選擇", command=lambda: choose_ship(), font=f_btn_sm, radius=8).grid(
+    RoundedButton(ship_row, "選擇", command=lambda: choose_ship(), font=f_btn_sm, radius=10).grid(
         row=0, column=1
     )
 
@@ -847,7 +847,7 @@ def launch_gui():
     )
     run_button = RoundedButton(
         stage_run, "開始處理", command=lambda: start_processing(),
-        variant="primary", font=f_btn, radius=11, padx=22, pady=10,
+        variant="primary", font=f_btn, radius=13, padx=22, pady=10,
     )
     run_button.grid(row=2, column=0, sticky="w")
     run_button.state(["disabled"])
@@ -912,9 +912,9 @@ def launch_gui():
 
     con_bg.bind("<Configure>", con_bg_redraw)
     for tag, color in (
-        ("prompt", "#4FC2CB"), ("cmd", "#E4EAF0"), ("msg", CON_FG),
-        ("lvl_OK", "#63C48E"), ("lvl_SKIP", "#D9AE63"), ("lvl_WARN", "#D9AE63"),
-        ("lvl_INFO", "#7FD3DB"), ("lvl_ERR", "#E8837B"), ("sys", "#6C7783"),
+        ("prompt", "#E0A06A"), ("cmd", "#EDE3D3"), ("msg", CON_FG),
+        ("lvl_OK", "#9FC27A"), ("lvl_SKIP", "#E0B060"), ("lvl_WARN", "#E0B060"),
+        ("lvl_INFO", "#9FBAC0"), ("lvl_ERR", "#E58A6E"), ("sys", "#8A7B66"),
     ):
         log_text.tag_configure(tag, foreground=color)
 
